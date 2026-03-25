@@ -26,12 +26,15 @@ jobs:
     
     - name: Start MLflow server
       run: |
+        # Kill any existing MLflow servers
+        pkill -f "mlflow server" || true
         # Start MLflow server in background
-        mlflow server --host 0.0.0.0 --port 5001 &
+        mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri sqlite:///mlflow.db &
         # Wait for server to start
-        sleep 5
-      env:
-        MLFLOW_TRACKING_URI: http://localhost:5001
+        sleep 10
+        echo "MLflow server started on port 5001"
+        # Test connection
+        curl -s http://localhost:5001 || echo "Server starting..."
     
     - name: Train model with MLflow
       run: |
@@ -39,12 +42,25 @@ jobs:
       env:
         MLFLOW_TRACKING_URI: http://localhost:5001
     
+    - name: Verify model_info.txt
+      run: |
+        echo "Verifying model_info.txt:"
+        if [ -f model_info.txt ]; then
+          echo "✅ model_info.txt exists"
+          echo "Contents: $(cat model_info.txt)"
+        else
+          echo "❌ model_info.txt not found!"
+          ls -la
+          exit 1
+        fi
+    
     - name: Upload model info artifact
       uses: actions/upload-artifact@v4
       with:
         name: model-info
         path: model_info.txt
         retention-days: 1
+        if-no-files-found: error
 
   deploy:
     name: Deploy Model
@@ -68,14 +84,29 @@ jobs:
     
     - name: Start MLflow server
       run: |
-        mlflow server --host 0.0.0.0 --port 5001 &
-        sleep 5
+        pkill -f "mlflow server" || true
+        mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri sqlite:///mlflow.db &
+        sleep 10
+        echo "MLflow server started"
     
     - name: Download model info artifact
       uses: actions/download-artifact@v4
       with:
         name: model-info
         path: ./
+    
+    - name: Verify downloaded artifact
+      run: |
+        echo "Current directory contents:"
+        ls -la
+        echo "model_info.txt contents:"
+        if [ -f model_info.txt ]; then
+          cat model_info.txt
+          echo "✅ model_info.txt downloaded successfully"
+        else
+          echo "❌ model_info.txt not found after download!"
+          exit 1
+        fi
     
     - name: Check model accuracy threshold
       run: |
