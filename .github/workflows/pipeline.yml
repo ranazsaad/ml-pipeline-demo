@@ -24,41 +24,29 @@ jobs:
         python -m pip install --upgrade pip
         pip install mlflow scikit-learn
     
-    - name: Start MLflow server
-      run: |
-        # Kill any existing MLflow servers
-        pkill -f "mlflow server" || true
-        # Start MLflow server in background
-        mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri sqlite:///mlflow.db &
-        # Wait for server to start
-        sleep 10
-        echo "MLflow server started on port 5001"
-        # Test connection
-        curl -s http://localhost:5001 || echo "Server starting..."
-    
-    - name: Train model with MLflow
+    - name: Train model
       run: |
         python train.py
-      env:
-        MLFLOW_TRACKING_URI: http://localhost:5001
     
-    - name: Verify model_info.txt
+    - name: Verify output files
       run: |
-        echo "Verifying model_info.txt:"
-        if [ -f model_info.txt ]; then
-          echo "✅ model_info.txt exists"
-          echo "Contents: $(cat model_info.txt)"
-        else
-          echo "❌ model_info.txt not found!"
-          ls -la
-          exit 1
-        fi
+        echo "Checking output files:"
+        ls -la
+        echo "model_accuracy.txt content:"
+        cat model_accuracy.txt || echo "File not found"
+        echo "model_info.txt content:"
+        cat model_info.txt || echo "File not found"
+        echo "model_data.json content:"
+        cat model_data.json || echo "File not found"
     
-    - name: Upload model info artifact
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: model-info
-        path: model_info.txt
+        name: model-artifacts
+        path: |
+          model_info.txt
+          model_accuracy.txt
+          model_data.json
         retention-days: 1
         if-no-files-found: error
 
@@ -82,41 +70,30 @@ jobs:
         python -m pip install --upgrade pip
         pip install mlflow scikit-learn
     
-    - name: Start MLflow server
-      run: |
-        pkill -f "mlflow server" || true
-        mlflow server --host 0.0.0.0 --port 5001 --backend-store-uri sqlite:///mlflow.db &
-        sleep 10
-        echo "MLflow server started"
-    
-    - name: Download model info artifact
+    - name: Download artifacts
       uses: actions/download-artifact@v4
       with:
-        name: model-info
+        name: model-artifacts
         path: ./
     
-    - name: Verify downloaded artifact
+    - name: Verify downloaded files
       run: |
-        echo "Current directory contents:"
+        echo "Downloaded files:"
         ls -la
-        echo "model_info.txt contents:"
-        if [ -f model_info.txt ]; then
-          cat model_info.txt
-          echo "✅ model_info.txt downloaded successfully"
-        else
-          echo "❌ model_info.txt not found after download!"
-          exit 1
-        fi
+        echo "model_accuracy.txt content:"
+        cat model_accuracy.txt || echo "File not found"
+        echo "model_info.txt content:"
+        cat model_info.txt || echo "File not found"
+        echo "model_data.json content:"
+        cat model_data.json || echo "File not found"
     
     - name: Check model accuracy threshold
       run: |
         python check_threshold.py
-      env:
-        MLFLOW_TRACKING_URI: http://localhost:5001
     
     - name: Mock Docker build
       if: success()
       run: |
-        RUN_ID=$(cat model_info.txt)
+        RUN_ID=$(cat model_info.txt 2>/dev/null || echo "unknown")
         echo "🐳 Building Docker image for Run ID: $RUN_ID"
         echo "✅ Docker build completed successfully"

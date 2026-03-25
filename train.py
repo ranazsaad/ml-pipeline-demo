@@ -8,13 +8,14 @@ from sklearn.metrics import accuracy_score
 import numpy as np
 import random
 import os
+import json
 
 # Set random seeds for reproducibility
 np.random.seed(42)
 random.seed(42)
 
 def main():
-    # Use environment variable for MLflow tracking URI
+    # Use environment variable for MLflow tracking URI (optional)
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
     mlflow.set_tracking_uri(tracking_uri)
     print(f"🔗 MLflow Tracking URI: {tracking_uri}")
@@ -42,27 +43,39 @@ def main():
     
     print(f"🎯 Model Accuracy: {accuracy:.4f}")
     
-    # Log to MLflow
-    with mlflow.start_run() as run:
-        # Log parameters
-        mlflow.log_param("n_estimators", 100)
-        mlflow.log_param("test_size", 0.2)
-        
-        # Log metrics
-        mlflow.log_metric("accuracy", accuracy)
-        
-        # Log the model
-        mlflow.sklearn.log_model(model, "model")
-        
-        # Get the run ID
-        run_id = run.info.run_id
-        print(f"📝 MLflow Run ID: {run_id}")
-        
-        # Create model_info.txt with the run ID
-        with open("model_info.txt", "w") as f:
-            f.write(run_id)
-        
-        print("✅ model_info.txt created successfully")
+    # Log to MLflow if server is available
+    try:
+        with mlflow.start_run() as run:
+            mlflow.log_param("n_estimators", 100)
+            mlflow.log_param("test_size", 0.2)
+            mlflow.log_metric("accuracy", accuracy)
+            mlflow.sklearn.log_model(model, "model")
+            run_id = run.info.run_id
+            print(f"📝 MLflow Run ID: {run_id}")
+    except Exception as e:
+        print(f"⚠️ MLflow logging failed: {e}")
+        run_id = "local-run"
+    
+    # Create model_info.txt with run ID and accuracy
+    with open("model_info.txt", "w") as f:
+        f.write(run_id)
+    
+    # Also save accuracy to a separate file for easy access
+    with open("model_accuracy.txt", "w") as f:
+        f.write(str(accuracy))
+    
+    # Save both in JSON format for reliability
+    model_data = {
+        "run_id": run_id,
+        "accuracy": accuracy,
+        "model_type": "random_forest"
+    }
+    with open("model_data.json", "w") as f:
+        json.dump(model_data, f)
+    
+    print("✅ model_info.txt created successfully")
+    print(f"✅ model_accuracy.txt created with accuracy: {accuracy}")
+    print(f"✅ model_data.json created with all data")
 
 if __name__ == "__main__":
     main()

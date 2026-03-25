@@ -1,76 +1,78 @@
 # check_threshold.py
-import mlflow
 import sys
 import os
+import json
 
 def main():
-    # Get MLflow tracking URI
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
-    mlflow.set_tracking_uri(tracking_uri)
-    print(f"🔗 MLflow Tracking URI: {tracking_uri}")
+    print("🔍 Checking model accuracy threshold...")
     
-    # Check if model_info.txt exists
-    if not os.path.exists("model_info.txt"):
-        print("❌ model_info.txt not found in current directory")
+    # Check if model_accuracy.txt exists (simplest approach)
+    if os.path.exists("model_accuracy.txt"):
+        try:
+            with open("model_accuracy.txt", "r") as f:
+                accuracy = float(f.read().strip())
+            print(f"📊 Read accuracy from model_accuracy.txt: {accuracy:.4f}")
+        except Exception as e:
+            print(f"❌ Error reading model_accuracy.txt: {e}")
+            sys.exit(1)
+    
+    # Alternative: Check model_data.json
+    elif os.path.exists("model_data.json"):
+        try:
+            with open("model_data.json", "r") as f:
+                model_data = json.load(f)
+                accuracy = model_data.get("accuracy")
+                run_id = model_data.get("run_id")
+                print(f"📊 Read from model_data.json - Run ID: {run_id}, Accuracy: {accuracy:.4f}")
+        except Exception as e:
+            print(f"❌ Error reading model_data.json: {e}")
+            sys.exit(1)
+    
+    # Fallback: Read from model_info.txt and try MLflow
+    elif os.path.exists("model_info.txt"):
+        try:
+            with open("model_info.txt", "r") as f:
+                run_id = f.read().strip()
+            print(f"📊 Found model_info.txt with Run ID: {run_id}")
+            
+            # Try to get accuracy from MLflow
+            try:
+                import mlflow
+                import os
+                tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
+                mlflow.set_tracking_uri(tracking_uri)
+                run = mlflow.get_run(run_id)
+                accuracy = run.data.metrics.get("accuracy")
+                print(f"📊 Got accuracy from MLflow: {accuracy:.4f}")
+            except Exception as e:
+                print(f"⚠️ Could not get accuracy from MLflow: {e}")
+                print("❌ Cannot determine accuracy")
+                sys.exit(1)
+        except Exception as e:
+            print(f"❌ Error reading files: {e}")
+            sys.exit(1)
+    
+    else:
+        print("❌ No accuracy files found (model_accuracy.txt, model_data.json, or model_info.txt)")
         print("Current directory contents:")
         for file in os.listdir("."):
             print(f"  - {file}")
         sys.exit(1)
     
-    # Read run ID
-    try:
-        with open("model_info.txt", "r") as f:
-            run_id = f.read().strip()
-        if not run_id:
-            print("❌ model_info.txt is empty")
-            sys.exit(1)
-        print(f"📊 Checking model with Run ID: {run_id}")
-    except Exception as e:
-        print(f"❌ Error reading model_info.txt: {e}")
-        sys.exit(1)
+    # Check threshold
+    threshold = 0.85
+    print(f"🎯 Model Accuracy: {accuracy:.4f}")
+    print(f"📏 Threshold: {threshold}")
     
-    # List all runs to debug
-    try:
-        print("Listing all MLflow runs...")
-        experiment = mlflow.get_experiment_by_name("Default")
-        if experiment:
-            runs = mlflow.search_runs(experiment_ids=[experiment.experiment_id])
-            print(f"Found {len(runs)} runs")
-            if len(runs) > 0:
-                print("Available runs:")
-                for idx, row in runs.iterrows():
-                    print(f"  - {row['run_id']}: accuracy={row.get('metrics.accuracy', 'N/A')}")
-    except Exception as e:
-        print(f"Warning: Could not list runs: {e}")
-    
-    # Get the specific run
-    try:
-        run = mlflow.get_run(run_id)
-        print(f"✅ Found run: {run.info.run_id}")
-        
-        # Extract accuracy metric
-        accuracy = run.data.metrics.get("accuracy")
-        
-        if accuracy is None:
-            print("❌ Error: Accuracy metric not found in the run")
-            print(f"Available metrics: {list(run.data.metrics.keys())}")
-            sys.exit(1)
-        
-        print(f"🎯 Model Accuracy: {accuracy:.4f}")
-        
-        # Check threshold
-        threshold = 0.85
-        if accuracy >= threshold:
-            print(f"✅ Accuracy ({accuracy:.4f}) meets threshold ({threshold})")
+    if accuracy >= threshold:
+        print(f"✅ Accuracy ({accuracy:.4f}) meets threshold ({threshold})")
+        if 'run_id' in locals():
             print(f"🐳 Building Docker image for Run ID: {run_id}")
-            sys.exit(0)
         else:
-            print(f"❌ Accuracy ({accuracy:.4f}) is below threshold ({threshold})")
-            sys.exit(1)
-            
-    except Exception as e:
-        print(f"❌ Error fetching run from MLflow: {e}")
-        print(f"Run ID attempted: {run_id}")
+            print("🐳 Building Docker image for model")
+        sys.exit(0)
+    else:
+        print(f"❌ Accuracy ({accuracy:.4f}) is below threshold ({threshold})")
         sys.exit(1)
 
 if __name__ == "__main__":

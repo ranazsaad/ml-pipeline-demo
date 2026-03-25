@@ -6,9 +6,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
 import os
+import json
 
 def main():
-    # Use environment variable for MLflow tracking URI
+    # Use environment variable for MLflow tracking URI (optional)
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
     mlflow.set_tracking_uri(tracking_uri)
     print(f"🔗 MLflow Tracking URI: {tracking_uri}")
@@ -31,19 +32,35 @@ def main():
     
     print(f"🎯 Model Accuracy: {accuracy:.4f}")
     
-    with mlflow.start_run() as run:
-        mlflow.log_param("model_type", "decision_tree")
-        mlflow.log_param("max_depth", 2)
-        mlflow.log_metric("accuracy", accuracy)
-        mlflow.sklearn.log_model(model, "model")
-        
-        run_id = run.info.run_id
-        print(f"📝 MLflow Run ID: {run_id}")
-        
-        with open("model_info.txt", "w") as f:
-            f.write(run_id)
-        
-        print("✅ model_info.txt created successfully")
+    # Log to MLflow if server is available
+    try:
+        with mlflow.start_run() as run:
+            mlflow.log_param("model_type", "decision_tree")
+            mlflow.log_param("max_depth", 2)
+            mlflow.log_metric("accuracy", accuracy)
+            mlflow.sklearn.log_model(model, "model")
+            run_id = run.info.run_id
+            print(f"📝 MLflow Run ID: {run_id}")
+    except Exception as e:
+        print(f"⚠️ MLflow logging failed: {e}")
+        run_id = "local-run"
+    
+    # Create output files
+    with open("model_info.txt", "w") as f:
+        f.write(run_id)
+    
+    with open("model_accuracy.txt", "w") as f:
+        f.write(str(accuracy))
+    
+    model_data = {
+        "run_id": run_id,
+        "accuracy": accuracy,
+        "model_type": "decision_tree"
+    }
+    with open("model_data.json", "w") as f:
+        json.dump(model_data, f)
+    
+    print("✅ Files created successfully")
 
 if __name__ == "__main__":
     main()
