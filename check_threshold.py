@@ -6,18 +6,20 @@ import json
 def main():
     print("🔍 Checking model accuracy threshold...")
     
-    # Check if model_accuracy.txt exists (simplest approach)
+    # Try to read accuracy from files
+    accuracy = None
+    
+    # First try model_accuracy.txt
     if os.path.exists("model_accuracy.txt"):
         try:
             with open("model_accuracy.txt", "r") as f:
                 accuracy = float(f.read().strip())
             print(f"📊 Read accuracy from model_accuracy.txt: {accuracy:.4f}")
         except Exception as e:
-            print(f"❌ Error reading model_accuracy.txt: {e}")
-            sys.exit(1)
+            print(f"⚠️ Error reading model_accuracy.txt: {e}")
     
-    # Alternative: Check model_data.json
-    elif os.path.exists("model_data.json"):
+    # If not found, try model_data.json
+    if accuracy is None and os.path.exists("model_data.json"):
         try:
             with open("model_data.json", "r") as f:
                 model_data = json.load(f)
@@ -25,35 +27,20 @@ def main():
                 run_id = model_data.get("run_id")
                 print(f"📊 Read from model_data.json - Run ID: {run_id}, Accuracy: {accuracy:.4f}")
         except Exception as e:
-            print(f"❌ Error reading model_data.json: {e}")
-            sys.exit(1)
+            print(f"⚠️ Error reading model_data.json: {e}")
     
-    # Fallback: Read from model_info.txt and try MLflow
-    elif os.path.exists("model_info.txt"):
+    # If still not found, try model_info.txt (but that only has run_id, not accuracy)
+    if accuracy is None and os.path.exists("model_info.txt"):
         try:
             with open("model_info.txt", "r") as f:
                 run_id = f.read().strip()
             print(f"📊 Found model_info.txt with Run ID: {run_id}")
-            
-            # Try to get accuracy from MLflow
-            try:
-                import mlflow
-                import os
-                tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
-                mlflow.set_tracking_uri(tracking_uri)
-                run = mlflow.get_run(run_id)
-                accuracy = run.data.metrics.get("accuracy")
-                print(f"📊 Got accuracy from MLflow: {accuracy:.4f}")
-            except Exception as e:
-                print(f"⚠️ Could not get accuracy from MLflow: {e}")
-                print("❌ Cannot determine accuracy")
-                sys.exit(1)
+            print("⚠️ But no accuracy file found!")
         except Exception as e:
-            print(f"❌ Error reading files: {e}")
-            sys.exit(1)
+            print(f"⚠️ Error reading model_info.txt: {e}")
     
-    else:
-        print("❌ No accuracy files found (model_accuracy.txt, model_data.json, or model_info.txt)")
+    if accuracy is None:
+        print("❌ No accuracy file found (model_accuracy.txt or model_data.json)")
         print("Current directory contents:")
         for file in os.listdir("."):
             print(f"  - {file}")

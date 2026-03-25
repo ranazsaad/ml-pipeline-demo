@@ -1,19 +1,12 @@
 # train_low_accuracy.py
-import mlflow
-import mlflow.sklearn
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
-import os
+import random
 import json
 
 def main():
-    # Use environment variable for MLflow tracking URI (optional)
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001")
-    mlflow.set_tracking_uri(tracking_uri)
-    print(f"🔗 MLflow Tracking URI: {tracking_uri}")
-    
     print("Loading Iris dataset...")
     iris = load_iris()
     X, y = iris.data, iris.target
@@ -32,20 +25,9 @@ def main():
     
     print(f"🎯 Model Accuracy: {accuracy:.4f}")
     
-    # Log to MLflow if server is available
-    try:
-        with mlflow.start_run() as run:
-            mlflow.log_param("model_type", "decision_tree")
-            mlflow.log_param("max_depth", 2)
-            mlflow.log_metric("accuracy", accuracy)
-            mlflow.sklearn.log_model(model, "model")
-            run_id = run.info.run_id
-            print(f"📝 MLflow Run ID: {run_id}")
-    except Exception as e:
-        print(f"⚠️ MLflow logging failed: {e}")
-        run_id = "local-run"
-    
     # Create output files
+    run_id = "model_" + str(random.randint(10000, 99999))
+    
     with open("model_info.txt", "w") as f:
         f.write(run_id)
     
@@ -55,7 +37,8 @@ def main():
     model_data = {
         "run_id": run_id,
         "accuracy": accuracy,
-        "model_type": "decision_tree"
+        "model_type": "decision_tree",
+        "max_depth": 2
     }
     with open("model_data.json", "w") as f:
         json.dump(model_data, f)
