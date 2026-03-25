@@ -3,10 +3,7 @@ name: ML Model Pipeline
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # Allow manual trigger
-
-env:
-  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -25,13 +22,22 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install mlflow scikit-learn
+    
+    - name: Start MLflow server
+      run: |
+        # Start MLflow server in background
+        mlflow server --host 0.0.0.0 --port 5001 &
+        # Wait for server to start
+        sleep 5
+      env:
+        MLFLOW_TRACKING_URI: http://localhost:5001
     
     - name: Train model with MLflow
       run: |
         python train.py
       env:
-        MLFLOW_TRACKING_URI: ${{ env.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_URI: http://localhost:5001
     
     - name: Upload model info artifact
       uses: actions/upload-artifact@v4
@@ -60,6 +66,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install mlflow scikit-learn
     
+    - name: Start MLflow server
+      run: |
+        mlflow server --host 0.0.0.0 --port 5001 &
+        sleep 5
+    
     - name: Download model info artifact
       uses: actions/download-artifact@v4
       with:
@@ -70,7 +81,7 @@ jobs:
       run: |
         python check_threshold.py
       env:
-        MLFLOW_TRACKING_URI: ${{ env.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_URI: http://localhost:5001
     
     - name: Mock Docker build
       if: success()
